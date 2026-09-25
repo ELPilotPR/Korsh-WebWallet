@@ -1,4 +1,14 @@
 import React, { useState } from 'react';
+import {
+  KeyRound,
+  Eye,
+  EyeOff,
+  AlertTriangle,
+  ArrowRight,
+  ArrowLeft,
+  CheckCircle2,
+  Loader2,
+} from 'lucide-react';
 
 interface CreateWalletProps {
   onSubmit: (password: string) => Promise<void>;
@@ -10,83 +20,164 @@ interface CreateWalletProps {
 export function CreateWallet({ onSubmit, onBack, loading, error }: CreateWalletProps) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
-  const passwordsMatch = password === confirm;
-  const isValid = password.length >= 8 && passwordsMatch;
+  const passwordsMatch = password.length > 0 && password === confirm;
+  const isLengthValid = password.length >= 8;
+  const isValid = isLengthValid && passwordsMatch;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isValid) onSubmit(password);
+    if (isValid && !loading) onSubmit(password);
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Create New Wallet</h1>
-        <p className="text-dark-400 mt-2">
-          Choose a strong password to protect your wallet. This password encrypts
-          your keys locally in this browser.
-        </p>
+    <div className="glass-card max-w-lg mx-auto p-6 sm:p-8 space-y-6 animate-fadeIn">
+      
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="p-2.5 rounded-xl bg-[#00CC52]/10 text-[#00CC52]">
+          <KeyRound className="w-5 h-5" />
+        </div>
+        <div>
+          <h2 className="font-heading font-black text-xl sm:text-2xl text-white">
+            Create Master Wallet
+          </h2>
+          <p className="text-xs text-[#7B8E84]">
+            Generate your private non-custodial cryptographic vault
+          </p>
+        </div>
       </div>
 
-      <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-xl p-4 text-sm space-y-2">
-        <p className="text-yellow-300 font-semibold">Important — Read carefully:</p>
-        <ul className="text-yellow-200/80 space-y-1 text-xs list-disc pl-4">
-          <li>This is a <strong className="text-white">self-custody wallet</strong>. We do NOT store your keys or password on any server.</li>
-          <li>After creating your wallet, you will receive a <strong className="text-white">12-word recovery phrase</strong>. This is the ONLY way to recover your wallet.</li>
-          <li>If you lose your recovery phrase and forget your password, <strong className="text-red-300">your funds will be permanently lost</strong>. No one can help you recover them.</li>
+      {/* Advisory Card */}
+      <div className="p-4 rounded-xl bg-[#FFB020]/10 border border-[#FFB020]/25 space-y-2 text-xs">
+        <div className="flex items-center gap-2 text-[#FFB020] font-semibold">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>Self-Custody Security Protocol:</span>
+        </div>
+        <ul className="text-[#E2ECE5]/80 space-y-1.5 pl-5 list-disc text-[11px] leading-relaxed">
+          <li>
+            Your keys are encrypted <strong className="text-white">only on this device</strong> using AES-GCM 256-bit with PBKDF2 (600,000 rounds).
+          </li>
+          <li>
+            In the next step, you will receive a <strong className="text-white">12-word mnemonic phrase</strong>.
+          </li>
+          <li>
+            If you lose this phrase and forget your password, <strong className="text-red-400">your funds are unrecoverable</strong>.
+          </li>
         </ul>
       </div>
 
+      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-dark-300 mb-2">
-            Password
+        {/* Password Field */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-[#7B8E84] uppercase tracking-wider block">
+            Vault Master Password
           </label>
-          <input
-            type="password"
-            className="input-field"
-            placeholder="Minimum 8 characters"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={8}
-            required
-            autoFocus
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              className="input-field pr-10"
+              placeholder="Minimum 8 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              minLength={8}
+              required
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#7B8E84] hover:text-white transition-colors"
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-dark-300 mb-2">
-            Confirm Password
+        {/* Confirm Password Field */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-[#7B8E84] uppercase tracking-wider block">
+            Confirm Master Password
           </label>
-          <input
-            type="password"
-            className="input-field"
-            placeholder="Repeat your password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            required
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              className="input-field pr-10"
+              placeholder="Repeat your password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+            />
+            {confirm && passwordsMatch && (
+              <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#00CC52]">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+            )}
+          </div>
           {confirm && !passwordsMatch && (
-            <p className="text-red-400 text-sm mt-1">Passwords do not match</p>
+            <p className="text-red-400 text-[11px] font-mono">Passwords do not match</p>
           )}
         </div>
 
+        {/* Checklist */}
+        <div className="p-3 rounded-xl bg-[#080C09] border border-white/[0.05] space-y-1.5 text-[11px] font-mono">
+          <div className="flex items-center gap-2">
+            <span className={isLengthValid ? 'text-[#00CC52]' : 'text-[#7B8E84]'}>
+              {isLengthValid ? '●' : '○'}
+            </span>
+            <span className={isLengthValid ? 'text-white' : 'text-[#7B8E84]'}>
+              At least 8 characters
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={passwordsMatch ? 'text-[#00CC52]' : 'text-[#7B8E84]'}>
+              {passwordsMatch ? '●' : '○'}
+            </span>
+            <span className={passwordsMatch ? 'text-white' : 'text-[#7B8E84]'}>
+              Passwords match
+            </span>
+          </div>
+        </div>
+
         {error && (
-          <div className="bg-red-900/30 border border-red-700 rounded-xl p-3 text-red-300 text-sm">
+          <div className="p-3 rounded-xl bg-red-950/40 border border-red-800/40 text-red-300 text-xs">
             {error}
           </div>
         )}
 
         <div className="flex gap-3 pt-2">
-          <button type="button" onClick={onBack} className="btn-secondary flex-1">
-            Back
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={loading}
+            className="btn-secondary flex-1 py-3 text-sm justify-center"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Cancel</span>
           </button>
-          <button type="submit" disabled={!isValid || loading} className="btn-primary flex-1">
-            {loading ? 'Creating...' : 'Create Wallet'}
+
+          <button
+            type="submit"
+            disabled={!isValid || loading}
+            className="btn-primary flex-1 py-3 text-sm justify-center"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-[#050706]" />
+                <span>Generating...</span>
+              </>
+            ) : (
+              <>
+                <span>Create Wallet</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
           </button>
         </div>
       </form>
+
     </div>
   );
 }

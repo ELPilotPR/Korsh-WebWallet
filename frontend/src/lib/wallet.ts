@@ -100,11 +100,11 @@ export async function encrypt(plaintext: string, password: string): Promise<stri
   combined.set(iv, salt.length);
   combined.set(new Uint8Array(ciphertext), salt.length + iv.length);
 
-  return btoa(String.fromCharCode(...combined));
+  return Buffer.from(combined).toString('base64');
 }
 
 export async function decrypt(encryptedBase64: string, password: string): Promise<string> {
-  const combined = Uint8Array.from(atob(encryptedBase64), (c) => c.charCodeAt(0));
+  const combined = new Uint8Array(Buffer.from(encryptedBase64, 'base64'));
 
   const salt = combined.slice(0, 16);
   const iv = combined.slice(16, 28);

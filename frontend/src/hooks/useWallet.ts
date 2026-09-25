@@ -123,6 +123,7 @@ export function useWallet() {
       privateKey: null,
       mnemonic: null,
       balance: null,
+      error: null,
       view: 'unlock',
     }));
   }, []);

@@ -49,7 +49,9 @@ export async function buildTransaction(params: {
   privateKey: Uint8Array;
   feeRate?: number;
 }): Promise<{ hex: string; fee: number; txid: string }> {
-  const { fromAddress, toAddress, amountDuffs, privateKey, feeRate = DEFAULT_FEE_RATE } = params;
+  const { fromAddress: rawFrom, toAddress: rawTo, amountDuffs, privateKey, feeRate = DEFAULT_FEE_RATE } = params;
+  const fromAddress = rawFrom.trim();
+  const toAddress = rawTo.trim();
 
   // Fetch UTXOs for the sender
   const utxos: UTXO[] = await fetchUtxos(fromAddress);
@@ -154,7 +156,8 @@ export function duffsToKsh(duffs: number): string {
 
 // Parse KSH string to duffs
 export function kshToDuffs(ksh: string): number {
-  const value = parseFloat(ksh);
-  if (isNaN(value) || value < 0) throw new Error('Invalid amount');
+  const normalized = ksh.replace(',', '.').trim();
+  const value = parseFloat(normalized);
+  if (isNaN(value) || value <= 0) throw new Error('Invalid amount');
   return Math.round(value * COIN);
 }

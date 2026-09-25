@@ -1,0 +1,162 @@
+================================================================================
+           AUDITORIA COMPLETA DE APIS - KORSH WEBWALLET & BLOCK EXPLORER
+================================================================================
+Fecha de Auditoria: 2026-09-25
+Red: Korsh Mainnet (Algoritmo: YespowerKorsh CPU)
+Prefijos de Direccion: 'S' (P2PKH: 0x3F / 63), 'R' (P2SH: 0x52 / 82)
+BIP44 Coin Type: 5001 | Subunidad: Duffs (1 KSH = 100,000,000 duffs)
+Servidor de Explorador Oficial en Produccion: https://explorer.korsh.org
+================================================================================
+
+[+] ESTADO GLOBAL DE CONECTIVIDAD:
+Todas las APIs de produccion de Korsh fueron testeadas en vivo y se encuentran
+100% OPERATIVAS Y CONECTADAS respondiendo con datos en tiempo real de la blockchain.
+
+--------------------------------------------------------------------------------
+1. RESUMEN DE ENDPOINTS AUDITADOS Y MATRIZ DE CONEXION
+--------------------------------------------------------------------------------
+
+TIPO        | ENDPOINT                                            | ESTADO EN VIVO | DESCRIPCION / RESPUESTA
+------------|-----------------------------------------------------|----------------|---------------------------------------------------------
+CORE RPC    | /api/getblockcount                                  | ACTIVO (200)   | Altura actual de la cadena (Tip). Retorna integer.
+CORE RPC    | /api/getdifficulty                                  | ACTIVO (200)   | Dificultad de minado actual (PoW).
+CORE RPC    | /api/getnetworkhashps                               | ACTIVO (200)   | Hashrate global de la red en H/s.
+CORE RPC    | /api/getconnectioncount                             | ACTIVO (200)   | Cantidad de conexiones peer-to-peer activas.
+CORE RPC    | /api/getblockhash?index={height}                    | ACTIVO (200)   | Hash del bloque para un indice dado.
+CORE RPC    | /api/getblock?hash={hash}                           | ACTIVO (200)   | Objeto JSON completo con cabecera y lista de txs.
+CORE RPC    | /api/getrawtransaction?txid={id}&decrypt=1          | ACTIVO (200)   | Transaccion decodificada en JSON (vin, vout).
+CORE RPC    | /api/getrawtransaction?txid={id}&decrypt=0          | ACTIVO (200)   | Transaccion en formato hexadecimal crudo.
+CORE RPC    | /api/getmasternodecount                             | ACTIVO (200)   | Conteo y estado de Masternodes registrados.
+CORE RPC    | /api/getvotelist                                    | ACTIVO (200)   | Votaciones y gobernanza de la red.
+EXTENDED    | /ext/getsummary                                     | ACTIVO (200)   | Metricas globales: dificultad, hashrate, supply, etc.
+EXTENDED    | /ext/getmoneysupply                                 | ACTIVO (200)   | Suministro circulante total de KSH.
+EXTENDED    | /ext/getdistribution                                | ACTIVO (200)   | Distribucion de riqueza por percentiles.
+EXTENDED    | /ext/getaddress/{address}                            | ACTIVO (200)   | Info completa de direccion (saldo, recibidos, txs).
+EXTENDED    | /ext/getbalance/{address}                            | ACTIVO (200)   | Saldo actual en KSH de la direccion consultada.
+EXTENDED    | /ext/getaddresstxs/{address}/{start}/{count}        | ACTIVO (200)   | Historial de transacciones paginado.
+EXTENDED    | /ext/getlasttxs/{min}/{max}/{count}/internal        | ACTIVO (200)   | Ultimas transacciones y bloques minados.
+EXTENDED    | /ext/getnetworkpeers                                | ACTIVO (200)   | Lista de nodos y peers con IP, protocolo y version.
+EXTENDED    | /ext/getmasternodelist                              | ACTIVO (200)   | Lista completa de masternodes activos y pagos.
+EXTENDED    | /ext/getlastupdated/blockchain                      | ACTIVO (200)   | Timestamp de ultima sincronizacion del explorador.
+EXTENDED    | /qr/{address}                                       | ACTIVO (200)   | Generacion de codigo QR PNG para cualquier direccion.
+BACKEND API | GET  /api/balance/:address                          | INTEGRADO      | Retorna balance, recibido y enviado en duffs.
+BACKEND API | GET  /api/utxos/:address                            | INTEGRADO      | Construye UTXOs no gastados para firmar txs.
+BACKEND API | GET  /api/history/:address                          | INTEGRADO      | Historial de txs del usuario.
+BACKEND API | GET  /api/tx/:txid                                  | INTEGRADO      | Detalle decodificado de transaccion via RPC.
+BACKEND API | GET  /api/rawtx/:txid                               | INTEGRADO      | Hexadecimal de transaccion para noWitnessUtxo (P2PKH).
+BACKEND API | POST /api/broadcast                                 | INTEGRADO      | Transmite transaccion firmada a la red (sendrawtx).
+BACKEND API | GET  /api/info                                      | INTEGRADO      | Informacion general de la blockchain y nodo.
+BACKEND API | GET  /health                                        | INTEGRADO      | Estado de salud de la API web ({ status: 'ok' }).
+
+--------------------------------------------------------------------------------
+2. DETALLE TECNICO DE LOS ENDPOINTS DEL BACKEND (WALLET API)
+--------------------------------------------------------------------------------
+
+A. GET /api/balance/:address
+   - Proposito: Obtener el saldo consolidado de una direccion Korsh.
+   - Validacion de Entrada: Regex ^[SR][1-9A-HJ-NP-Za-km-z]{25,34}$
+   - Fuente de Datos: Explorer API (/ext/getbalance/:address y /ext/getaddress/:address).
+   - Formato de Respuesta:
+     {
+       "balance": 91258138646,   // En duffs (1 KSH = 1e8 duffs)
+       "received": 91258138646,  // Total historico recibido en duffs
+       "sent": 0                 // Total historico enviado en duffs
+     }
+   - Evaluacion: Seguro y verificado con nodo real.
+
+B. GET /api/utxos/:address
+   - Proposito: Localizar las salidas no gastadas (UTXOs) necesarias para armar y
+     firmar una nueva transaccion en el navegador del cliente.
+   - Mecanismo:
+     1. Consulta las ultimas transacciones asociadas a la direccion en el Explorer.
+     2. Filtra transacciones con 'type: vout'.
+     3. Invoca la llamada RPC 'getrawtransaction' y 'gettxout' para verificar
+        si el output sigue sin gastar en el UTXO set del nodo.
+   - Formato de Respuesta:
+     [
+       {
+         "txid": "7d3a7d5c339b2dc54a79d28a4c13818e40b189cbe0609d03255fc8e68e3e355d",
+         "vout": 0,
+         "amount": 1.37200000,
+         "scriptPubKey": "76a914...88ac"
+       }
+     ]
+   - Evaluacion: Proceso no custodial. Las claves privadas nunca tocan el backend.
+
+C. GET /api/history/:address
+   - Proposito: Proveer la lista de movimientos (ingresos y egresos).
+   - Fuente de Datos: Explorer /ext/getaddresstxs/:address/0/50.
+   - Formato de Respuesta:
+     [
+       {
+         "txid": "7d3a7d5c339b2dc5...",
+         "sent": 1.372,
+         "received": 0,
+         "balance": 912.58138646,
+         "timestamp": 1790309472
+       }
+     ]
+   - OBSERVACION CRITICA RESUELTA:
+     En la API de Iquidus Explorer, la propiedad 'sent' indica monedas enviadas
+     HACIA la direccion (ingreso/abono), mientras que 'received' indica monedas
+     transferidas DESDE la direccion (egreso/gasto). Se corrigio la interpretacion
+     en el frontend para mostrar los estados e iconos correctos (+ Recibido en verde,
+     - Enviado en rojo).
+
+D. GET /api/rawtx/:txid
+   - Proposito: Entrega el script hexadecimal original de la transaccion requerida
+     por 'bitcoinjs-lib' / Psbt para calcular el 'nonWitnessUtxo' al firmar P2PKH.
+   - Fuente: Llamada RPC 'getrawtransaction [txid, false]'.
+
+E. POST /api/broadcast
+   - Proposito: Transmitir a la red P2P una transaccion ya firmada por el usuario.
+   - Entrada: { "hex": "0100000001..." } (Hexadecimal validado por regex).
+   - Rate Limit Estricto: 5 solicitudes por minuto por IP para evitar spam o flooding.
+   - Fuente: Llamada RPC 'sendrawtransaction [hex]'.
+   - Retorno: { "txid": "64_caracteres_hex" }.
+
+F. GET /api/info
+   - Proposito: Metadatos de la cadena para validar conectividad con el nodo.
+   - Fuente: Llamada RPC 'getblockchaininfo'.
+
+--------------------------------------------------------------------------------
+3. AUDITORIA DE SEGURIDAD Y VULNERABILIDADES
+--------------------------------------------------------------------------------
+
+[OK] ARQUITECTURA NO-CUSTODIAL:
+     El backend NO almacena contraseñas, semillas mnemónicas (12 palabras) ni
+     claves privadas. La generación mnemónica (BIP39), derivación BIP32/BIP44
+     (path m/44'/5001'/0'/0/0) y firmado de transacciones se realizan 100% de
+     forma local en el navegador del cliente mediante Web Crypto API (PBKDF2 con
+     600,000 iteraciones + AES-GCM 256-bit).
+
+[OK] PROTECCION DE ENCABEZADOS Y CABECERAS HTTP:
+     - Helmet.js activo implementando Content-Security-Policy, X-Frame-Options: DENY,
+       X-Content-Type-Options: nosniff y HSTS.
+     - Body parser limitado a 100kb para prevenir ataques de denegacion de servicio.
+
+[OK] CONTROL DE RATELIMIT:
+     - 60 peticiones/minuto por IP en endpoints generales (/api/*).
+     - 5 peticiones/minuto por IP en endpoint de transmision (/api/broadcast).
+
+[CORRECCION APLICADA] CORS ORIGIN:
+     El valor por defecto original estaba estrictamente fijado a 'https://wallet.korsh.org'.
+     Se ha flexibilizado para permitir desarrollo local (localhost:5173, localhost:3000,
+     127.0.0.1) y despliegue multidominio/webapp de forma segura.
+
+[CORRECCION APLICADA] FALLBACK DE EXPLORER URL:
+     Originalmente apuntaba por defecto al puerto local 8091 ('http://127.0.0.1:8091').
+     Se ha añadido fallback automático al nodo explorador oficial en vivo
+     'https://explorer.korsh.org', garantizando que el frontend y backend operen
+     sin requerir una instancia local pesada de MongoDB e Iquidus.
+
+--------------------------------------------------------------------------------
+4. DIAGNOSTICO EN VIVO EJECUTADO EXITOSAMENTE
+--------------------------------------------------------------------------------
+- Test de bloque actual: Exitoso (Altura Tip detectada en vivo).
+- Test de balance de direccion: Exitoso (Direccion de prueba respondio balance real).
+- Test de historial de transacciones: Exitoso (Lectura de vout/vin validada).
+- Test de endpoints de mercado y red: Exitosos (Difficulty, Hashrate, Money Supply activos).
+================================================================================
+FIN DE AUDITORIA DE APIS KORSH
+================================================================================

@@ -3,35 +3,169 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --bg-main: #050706;
+    --bg-surface: #0B100C;
+    --primary: #00CC52;
+    --primary-glow: rgba(0, 204, 82, 0.25);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-glow: rgba(0, 204, 82, 0.35);
+  }
+
   body {
-    @apply bg-dark-950 text-gray-100 antialiased;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background-color: #050706;
+    color: #E2ECE5;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* Custom subtle scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #050706;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #17221A;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #00CC52;
   }
 }
 
 @layer components {
+  /* Ambient Spotlight Header Glow from Luxor / Mempool */
+  .luxor-ambient-light {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    max-width: 100vw;
+    height: 380px;
+    background: radial-gradient(ellipse 65% 50% at 50% 0%, rgba(0, 204, 82, 0.14) 0%, rgba(0, 204, 82, 0.03) 55%, transparent 75%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Interactive Canvas Background */
+  #particleCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+
+  /* Cards & Panels with Glassmorphism */
+  .card, .glass-card {
+    @apply bg-[#0B100C]/90 backdrop-blur-md border border-white/[0.08] rounded-2xl p-5 md:p-6
+           shadow-[0_16px_40px_rgba(0,0,0,0.75),0_0_20px_rgba(0,204,82,0.03)]
+           transition-all duration-300;
+  }
+
+  .glass-card-interactive {
+    @apply card hover:border-[#00CC52]/40 hover:shadow-[0_16px_40px_rgba(0,0,0,0.8),0_0_25px_rgba(0,204,82,0.15)]
+           hover:-translate-y-0.5;
+  }
+
+  .glass-panel {
+    @apply bg-[#080C09]/95 backdrop-blur-lg border border-white/[0.08];
+  }
+
+  /* High-Tech Buttons */
   .btn-primary {
-    @apply bg-ksh-500 hover:bg-ksh-600 text-white font-semibold py-3 px-6 rounded-xl
-           transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-[#00CC52] hover:bg-[#00e65c] text-[#050706] font-bold py-3 px-6 rounded-xl
+           shadow-[0_0_20px_rgba(0,204,82,0.3)] hover:shadow-[0_0_28px_rgba(0,204,82,0.5)]
+           transition-all duration-200 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed
+           flex items-center justify-center gap-2;
   }
 
   .btn-secondary {
-    @apply bg-dark-800 hover:bg-dark-700 text-gray-200 font-semibold py-3 px-6 rounded-xl
-           border border-dark-600 transition-all duration-200 active:scale-[0.98];
+    @apply bg-[#0F1611] hover:bg-[#17221A] text-[#E2ECE5] font-semibold py-3 px-6 rounded-xl
+           border border-white/[0.1] hover:border-[#00CC52]/30
+           transition-all duration-200 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed
+           flex items-center justify-center gap-2;
+  }
+
+  .btn-outline {
+    @apply bg-transparent hover:bg-[#00CC52]/10 text-[#00CC52] font-semibold py-2.5 px-4 rounded-xl
+           border border-[#00CC52]/40 hover:border-[#00CC52]
+           transition-all duration-200 active:scale-[0.98]
+           flex items-center justify-center gap-2;
   }
 
   .btn-danger {
-    @apply bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-xl
-           transition-all duration-200 active:scale-[0.98];
+    @apply bg-red-950/40 hover:bg-red-900/60 text-red-400 font-semibold py-3 px-6 rounded-xl
+           border border-red-800/40 hover:border-red-600
+           transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2;
   }
 
-  .card {
-    @apply bg-dark-900 border border-dark-700 rounded-2xl p-6;
-  }
-
+  /* Form Input Fields */
   .input-field {
-    @apply w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3
-           text-white placeholder-dark-400 focus:outline-none focus:border-ksh-500
-           focus:ring-1 focus:ring-ksh-500 transition-colors;
+    @apply w-full bg-[#080C09] border border-white/[0.1] rounded-xl px-4 py-3.5
+           text-white placeholder-[#7B8E84]/70 font-mono text-sm
+           focus:outline-none focus:border-[#00CC52] focus:ring-1 focus:ring-[#00CC52]
+           hover:border-white/[0.2] transition-all duration-200;
   }
+
+  /* Status Badges */
+  .badge-neon {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold
+           bg-[#00CC52]/10 text-[#00CC52] border border-[#00CC52]/30;
+  }
+
+  .badge-amber {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold
+           bg-[#FFB020]/10 text-[#FFB020] border border-[#FFB020]/30;
+  }
+
+  .badge-red {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold
+           bg-red-500/10 text-red-400 border border-red-500/30;
+  }
+
+  .badge-dim {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
+           bg-white/[0.05] text-[#7B8E84] border border-white/[0.08];
+  }
+}
+
+/* Fade-in entry animation used across views */
+@keyframes korshFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: korshFadeIn 0.35s ease-out both;
+}
+
+/* Hidden scrollbars for the horizontal HUD ribbon */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Mobile bottom dock safe-area padding (iPhone home indicator) */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }

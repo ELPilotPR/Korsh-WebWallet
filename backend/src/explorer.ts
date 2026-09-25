@@ -1,8 +1,13 @@
 // Client for the eIquidus explorer API (runs locally on the VPS)
-const EXPLORER_URL = process.env.EXPLORER_URL || 'http://127.0.0.1:8091';
+const EXPLORER_URL = (process.env.EXPLORER_URL || 'http://127.0.0.1:8091').replace(/\/+$/, '');
 
 async function explorerFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${EXPLORER_URL}${path}`);
+  const res = await fetch(`${EXPLORER_URL}${path}`, {
+    headers: {
+      'User-Agent': 'KorshWebWallet/1.0',
+      'Accept': 'application/json, text/plain, */*',
+    },
+  });
   if (!res.ok) {
     throw new Error(`Explorer API error: ${res.status}`);
   }
@@ -19,6 +24,25 @@ export interface ExplorerAddress {
     addresses: string;
     type: string;
   }>;
+}
+
+export interface ExplorerSummary {
+  difficulty: string;
+  difficultyHybrid?: string;
+  supply: number | string;
+  hashrate: string;
+  lastPrice?: string | number;
+  connections: number;
+  blockcount: number;
+}
+
+// Live network summary from the explorer (used by /api/network-stats)
+export async function getNetworkSummary(): Promise<ExplorerSummary | null> {
+  try {
+    return await explorerFetch<ExplorerSummary>('/ext/getsummary');
+  } catch {
+    return null;
+  }
 }
 
 export interface ExplorerUtxo {

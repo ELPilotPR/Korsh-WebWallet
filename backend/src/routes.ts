@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { rpcCall } from './rpc';
-import { getBalance, getAddressTxs, ExplorerAddress } from './explorer';
+import { getBalance, getAddressTxs, getNetworkSummary, ExplorerAddress } from './explorer';
 
 // Build UTXOs by: explorer last_txs → getrawtransaction → gettxout
 async function buildUtxos(address: string): Promise<Array<{
@@ -171,6 +171,35 @@ router.get('/info', async (_req: Request, res: Response) => {
   try {
     const result = await rpcCall('getblockchaininfo');
     res.json(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    res.status(500).json({ error: message });
+  }
+});
+
+// GET /api/network-stats - live network summary (explorer, RPC fallback)
+router.get('/network-stats', async (_req: Request, res: Response) => {
+  try {
+    const summary = await getNetworkSummary();
+    if (summary) {
+      res.json({
+        blockcount: Number(summary.blockcount) || 0,
+        difficulty: String(summary.difficulty ?? '0'),
+        hashrate: String(summary.hashrate ?? '0'),
+        supply: Number(summary.supply) || 0,
+        connections: Number(summary.connections) || 0,
+      });
+      return;
+    }
+    // Fallback: node RPC when the explorer summary is unavailable
+    const info = (await rpcCall('getblockchaininfo')) as Record<string, unknown>;
+    res.json({
+      blockcount: Number(info.blocks) || 0,
+      difficulty: String(info.difficulty ?? '0'),
+      hashrate: 'N/A',
+      supply: 0,
+      connections: Number(info.connections) || 0,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     res.status(500).json({ error: message });

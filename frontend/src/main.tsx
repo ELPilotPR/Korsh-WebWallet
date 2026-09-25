@@ -21,7 +21,7 @@ class ErrorBoundary extends React.Component<
     return { error };
   }
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    // Log the real error so it is visible in the browser console for debugging.
+    // Surface the real error in the console so it is debuggable.
     console.error('Wallet UI crash:', error, info);
   }
   render() {
@@ -35,8 +35,8 @@ class ErrorBoundary extends React.Component<
             style={{
               marginTop: 12,
               padding: '8px 20px',
-              background: '#22c55e',
-              color: '#0a0a0f',
+              background: '#00CC52',
+              color: '#050706',
               border: 0,
               borderRadius: 8,
               cursor: 'pointer',
