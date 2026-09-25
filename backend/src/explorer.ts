@@ -98,7 +98,15 @@ export async function getAddressTxs(
     if (!Array.isArray(data)) {
       return [];
     }
-    return data;
+    // The explorer returns amounts as strings (e.g. "0.05") — normalize to numbers
+    // so the UI never receives non-numeric values (toFixed on a string crashes the app).
+    return data.map((t) => ({
+      txid: String(t.txid ?? ''),
+      sent: Number(t.sent) || 0,
+      received: Number(t.received) || 0,
+      balance: Number(t.balance) || 0,
+      timestamp: Number(t.timestamp) || 0,
+    }));
   } catch {
     return [];
   }

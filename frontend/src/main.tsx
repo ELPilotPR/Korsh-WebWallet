@@ -20,12 +20,32 @@ class ErrorBoundary extends React.Component<
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // Log the real error so it is visible in the browser console for debugging.
+    console.error('Wallet UI crash:', error, info);
+  }
   render() {
     if (this.state.error) {
       return (
         <div style={{ color: '#ff6b6b', background: '#1a1a2e', padding: 32, fontFamily: 'monospace' }}>
           <h2>Something went wrong</h2>
           <p>Please reload the page. If the issue persists, clear your browser cache.</p>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              marginTop: 12,
+              padding: '8px 20px',
+              background: '#22c55e',
+              color: '#0a0a0f',
+              border: 0,
+              borderRadius: 8,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontWeight: 600,
+            }}
+          >
+            Reload
+          </button>
         </div>
       );
     }

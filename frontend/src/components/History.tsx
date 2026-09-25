@@ -6,8 +6,9 @@ interface HistoryProps {
 }
 
 function formatTime(timestamp: number): string {
-  if (!timestamp) return 'Pending';
-  const date = new Date(timestamp * 1000);
+  const ts = Number(timestamp) || 0;
+  if (!ts) return 'Pending';
+  const date = new Date(ts * 1000);
   return date.toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -72,8 +73,10 @@ export function History({ address }: HistoryProps) {
       ) : (
         <div className="space-y-2">
           {txs.map((tx) => {
-            const isReceived = tx.received > 0;
-            const amount = isReceived ? tx.received : tx.sent;
+            // Coerce defensively: the explorer API has historically returned
+            // amounts as strings, and .toFixed() on a string throws.
+            const isReceived = Number(tx.received) > 0;
+            const amount = Number(isReceived ? tx.received : tx.sent) || 0;
 
             return (
               <div key={tx.txid} className="card flex items-center justify-between py-4">
