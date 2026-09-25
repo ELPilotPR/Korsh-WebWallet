@@ -136,25 +136,32 @@ export async function getAddressTxs(
   }
 }
 
-// Get last transactions from explorer
-export async function getLastTxs(count = 50): Promise<
-  Array<{
-    blockindex: number;
-    txid: string;
-    recipients: number;
-    amount: number;
-    timestamp: number;
-  }>
-> {
+// Latest mined blocks / chain activity (eIquidus 'internal' rows)
+export interface RecentBlock {
+  blockindex: number;
+  blockhash: string;
+  txid: string;
+  recipients: number;
+  amount: string;
+  timestamp: number;
+}
+
+export async function getRecentBlocks(count = 5): Promise<RecentBlock[]> {
   try {
-    const data = await explorerFetch<unknown[]>(`/ext/getlasttxs/${count}/0`);
-    return data as Array<{
-      blockindex: number;
-      txid: string;
-      recipients: number;
-      amount: number;
-      timestamp: number;
-    }>;
+    const raw = await explorerFetch<{ data: unknown[][] }>(`/ext/getlasttxs/0/0/${count}/internal`);
+    if (!raw || !Array.isArray(raw.data)) {
+      return [];
+    }
+    return raw.data
+      .filter((row) => Array.isArray(row) && row.length >= 6)
+      .map((row) => ({
+        blockindex: Number(row[0]),
+        blockhash: String(row[1]),
+        txid: String(row[2]),
+        recipients: Number(row[3]),
+        amount: String(row[4]),
+        timestamp: Number(row[5]),
+      }));
   } catch {
     return [];
   }

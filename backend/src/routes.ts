@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { rpcCall } from './rpc';
-import { getBalance, getAddressTxs, getNetworkSummary, ExplorerAddress } from './explorer';
+import { getBalance, getAddressTxs, getNetworkSummary, getRecentBlocks, ExplorerAddress } from './explorer';
 
 // Build UTXOs by: explorer last_txs → getrawtransaction → gettxout
 async function buildUtxos(address: string): Promise<Array<{
@@ -15,10 +15,9 @@ async function buildUtxos(address: string): Promise<Array<{
   const addrInfo = await res.json() as ExplorerAddress | { error: string };
   if ('error' in addrInfo) return [];
 
-  // 2. Get txids where we received funds (vout type)
-  const voutTxids = addrInfo.last_txs
-    .filter((tx) => tx.type === 'vout')
-    .map((tx) => tx.addresses);
+  // 2. Candidate txids: both received ('vout') and spent ('vin') txs.
+  //    Change outputs from our own spends live in 'vin' txs, so accept both types.
+  const voutTxids = [...new Set(addrInfo.last_txs.map((tx) => tx.addresses))];
 
   // 3. For each tx, find outputs to our address and check if still unspent
   const utxos: Array<{ txid: string; vout: number; amount: number; scriptPubKey: string }> = [];
@@ -200,6 +199,17 @@ router.get('/network-stats', async (_req: Request, res: Response) => {
       supply: 0,
       connections: Number(info.connections) || 0,
     });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    res.status(500).json({ error: message });
+  }
+});
+
+// GET /api/recent-blocks - latest mined blocks / chain activity
+router.get('/recent-blocks', async (_req: Request, res: Response) => {
+  try {
+    const blocks = await getRecentBlocks(5);
+    res.json(blocks);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     res.status(500).json({ error: message });

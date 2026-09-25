@@ -1,6 +1,14 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { duffsToKsh } from '../lib/transaction';
-import { fetchHistory, type BalanceResponse, type HistoryTx } from '../lib/api';
+import {
+  fetchHistory,
+  fetchNetworkStats,
+  fetchRecentBlocks,
+  type BalanceResponse,
+  type HistoryTx,
+  type NetworkStats,
+  type RecentBlock,
+} from '../lib/api';
 import {
   ArrowUpRight,
   ArrowDownLeft,
@@ -12,6 +20,8 @@ import {
   Clock,
   TrendingDown,
   TrendingUp,
+  Boxes,
+  Search,
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -32,46 +42,46 @@ export function Dashboard({
   onViewHistory,
 }: DashboardProps) {
   const [copied, setCopied] = useState(false);
+  const [copiedHash, setCopiedHash] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [recentTxs, setRecentTxs] = useState<HistoryTx[]>([]);
+  const [recentBlocks, setRecentBlocks] = useState<RecentBlock[]>([]);
+  const [networkStats, setNetworkStats] = useState<NetworkStats | null>(null);
   const [loadingTxs, setLoadingTxs] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const loadAll = async () => {
+    try {
+      setLoadingTxs(true);
+      const [txs, stats, blocks] = await Promise.all([
+        fetchHistory(address).catch(() => []),
+        fetchNetworkStats().catch(() => null),
+        fetchRecentBlocks().catch(() => []),
+      ]);
+      setRecentTxs(txs.slice(0, 4));
+      if (stats) setNetworkStats(stats);
+      if (blocks && blocks.length > 0) setRecentBlocks(blocks);
+    } catch {
+      // Ignored
+    } finally {
+      setLoadingTxs(false);
+    }
+  };
 
   useEffect(() => {
     onRefresh();
-    const interval = setInterval(onRefresh, 25000);
+    loadAll();
+    const interval = setInterval(() => {
+      onRefresh();
+      loadAll();
+    }, 25000);
     return () => clearInterval(interval);
-  }, [onRefresh]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadRecent() {
-      try {
-        setLoadingTxs(true);
-        const data = await fetchHistory(address);
-        if (!cancelled) {
-          setRecentTxs(data.slice(0, 4));
-        }
-      } catch {
-        // Ignored
-      } finally {
-        if (!cancelled) setLoadingTxs(false);
-      }
-    }
-    if (address) loadRecent();
-    return () => {
-      cancelled = true;
-    };
-  }, [address]);
+  }, [address, onRefresh]);
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     await onRefresh();
-    try {
-      const data = await fetchHistory(address);
-      setRecentTxs(data.slice(0, 4));
-    } catch {
-      // Ignored
-    }
+    await loadAll();
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
@@ -81,16 +91,53 @@ export function Dashboard({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCopyHash = (hash: string) => {
+    navigator.clipboard.writeText(hash);
+    setCopiedHash(hash);
+    setTimeout(() => setCopiedHash(null), 2000);
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) return;
+
+    // Check if it's block height, hash, txid or address
+    if (/^\d+$/.test(q)) {
+      window.open(`https://explorer.korsh.org/block/${q}`, '_blank');
+    } else if (/^[0-9a-fA-F]{64}$/.test(q)) {
+      window.open(`https://explorer.korsh.org/tx/${q}`, '_blank');
+    } else if (/^[SR][1-9A-HJ-NP-Za-km-z]{25,34}$/.test(q)) {
+      window.open(`https://explorer.korsh.org/address/${q}`, '_blank');
+    } else {
+      window.open(`https://explorer.korsh.org/?search=${encodeURIComponent(q)}`, '_blank');
+    }
+  };
+
   const balanceKsh = balance ? duffsToKsh(balance.balance) : '0.00';
   const receivedKsh = balance && balance.received > 0 ? duffsToKsh(balance.received) : '0.00';
   const sentKsh = balance && balance.sent > 0 ? duffsToKsh(balance.sent) : '0.00';
+
+  // Calculations for Supply KPI
+  const supplyNum = networkStats?.supply || 11118;
+  const maxSupply = 10000000;
+  const supplyPct = Math.min(100, (supplyNum / maxSupply) * 100).toFixed(3);
+
+  // Time format helper
+  const formatAgo = (timestamp: number) => {
+    if (!timestamp) return 'Just now';
+    const now = Math.floor(Date.now() / 1000);
+    const diff = Math.max(0, now - timestamp);
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    return `${Math.floor(diff / 3600)}h ago`;
+  };
 
   return (
     <div className="space-y-6 animate-fadeIn">
       
       {/* ================= 1. HERO BALANCE CARD ================= */}
       <div className="glass-card relative overflow-hidden p-6 sm:p-8 border border-white/[0.1] bg-gradient-to-br from-[#0B100C]/95 via-[#080C09]/95 to-[#050706]/95">
-        {/* Ambient Top Glow in Card */}
         <div className="absolute top-0 right-0 w-80 h-80 bg-[#00CC52]/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -103,7 +150,7 @@ export function Dashboard({
                 Total Available Balance
               </p>
               <p className="text-[11px] text-[#7B8E84]/70 font-mono">
-                Decentralized UTXO Set
+                Decentralized UTXO Set • Mainnet
               </p>
             </div>
           </div>
@@ -129,11 +176,11 @@ export function Dashboard({
             </span>
           </div>
           <p className="text-xs font-mono text-[#7B8E84] mt-1.5">
-            PoW/Yespower Asset • 1 KSH = 100,000,000 duffs
+            Yespower CPU Asset • 1 KSH = 100,000,000 duffs
           </p>
         </div>
 
-        {/* Stats Row: Inflow / Outflow */}
+        {/* Inflow / Outflow Row */}
         <div className="grid grid-cols-2 gap-3 pt-6 mt-6 border-t border-white/[0.08]">
           <div className="flex items-center gap-3 p-3 rounded-xl bg-[#080C09]/80 border border-white/[0.05]">
             <div className="p-2 rounded-lg bg-[#00CC52]/10 text-[#00CC52]">
@@ -216,30 +263,180 @@ export function Dashboard({
         </a>
       </div>
 
-      {/* ================= 3. YOUR ADDRESS DETAILS CARD ================= */}
-      <div className="card space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-[#7B8E84] uppercase tracking-wider">
-            Your Korsh Address (P2PKH)
-          </p>
-          <span className="badge-neon text-[10px]">Verified Network Key</span>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-[#080C09] border border-white/[0.08]">
-          <span className="font-mono text-xs sm:text-sm text-white break-all select-all">
-            {address}
-          </span>
-          <button
-            onClick={handleCopy}
-            className="p-2 rounded-lg bg-[#0F1611] hover:bg-[#17221A] text-[#7B8E84] hover:text-[#00CC52] transition-colors shrink-0"
-            title="Copy address"
-          >
-            {copied ? <Check className="w-4 h-4 text-[#00CC52]" /> : <Copy className="w-4 h-4" />}
+      {/* ================= 3. UNIVERSAL EXPLORER SEARCH BAR ================= */}
+      <div className="glass-card p-3 sm:p-4">
+        <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-[#7B8E84] absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Explore block height (#5532), TXID, or address (S...)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-[#080C09] border border-white/[0.08] focus:border-[#00CC52] rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-[#7B8E84] font-mono focus:outline-none transition-colors"
+            />
+          </div>
+          <button type="submit" className="btn-primary py-2.5 px-4 text-xs shrink-0">
+            <span>Explore</span>
+            <ExternalLink className="w-3.5 h-3.5" />
           </button>
+        </form>
+
+        <div className="flex items-center gap-2 mt-2.5 pt-2 border-t border-white/[0.05] text-[11px] text-[#7B8E84] flex-wrap">
+          <span className="font-semibold text-white/80">Direct Lookups:</span>
+          <a
+            href="https://explorer.korsh.org/richlist"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[#00CC52] underline decoration-white/20"
+          >
+            Rich List
+          </a>
+          <span>•</span>
+          <a
+            href="https://explorer.korsh.org/masternodes"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[#00CC52] underline decoration-white/20"
+          >
+            Masternodes
+          </a>
+          <span>•</span>
+          <a
+            href="https://pool.korsh.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[#00CC52] underline decoration-white/20"
+          >
+            Mining Pool
+          </a>
         </div>
       </div>
 
-      {/* ================= 4. RECENT ACTIVITY PREVIEW ================= */}
+      {/* ================= 4. INSTITUTIONAL KPI BENTO GRID (FROM EXPLORER) ================= */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* KPI 1: Yespower CPU Hashrate */}
+        <div className="card p-4 space-y-2 bg-[#080C09]/90 border-white/[0.08]">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-[#7B8E84] font-medium">Yespower Hashrate</span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#00CC52]/10 text-[#00CC52] border border-[#00CC52]/30">
+              POW
+            </span>
+          </div>
+          <div className="font-heading font-black text-lg sm:text-xl text-white">
+            {networkStats?.hashrate ? networkStats.hashrate : '7.87 KH/s'}
+          </div>
+          <p className="text-[10px] text-[#7B8E84] font-mono">N=256, r=8 (256 KB L2)</p>
+        </div>
+
+        {/* KPI 2: Mining Difficulty */}
+        <div className="card p-4 space-y-2 bg-[#080C09]/90 border-white/[0.08]">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-[#7B8E84] font-medium">Difficulty</span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#00CC52]/10 text-[#00CC52] border border-[#00CC52]/30">
+              LIVE
+            </span>
+          </div>
+          <div className="font-heading font-black text-lg sm:text-xl text-[#00CC52]">
+            {networkStats?.difficulty ? parseFloat(networkStats.difficulty).toFixed(4) : '0.1607'}
+          </div>
+          <p className="text-[10px] text-[#7B8E84] font-mono">Target: 20-block window</p>
+        </div>
+
+        {/* KPI 3: Circulating Supply */}
+        <div className="card p-4 space-y-2 bg-[#080C09]/90 border-white/[0.08]">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-[#7B8E84] font-medium">Supply</span>
+            <span className="text-[9px] font-bold text-[#00CC52] font-mono">{supplyPct}%</span>
+          </div>
+          <div className="w-full bg-[#121A14] h-1.5 rounded-full overflow-hidden">
+            <div
+              className="bg-[#00CC52] h-full rounded-full transition-all duration-500"
+              style={{ width: `${Math.max(1, parseFloat(supplyPct))}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] font-mono text-[#7B8E84]">
+            <span>{supplyNum.toLocaleString()} KSH</span>
+            <span>10M Cap</span>
+          </div>
+        </div>
+
+        {/* KPI 4: Masternodes Architecture */}
+        <div className="card p-4 space-y-2 bg-[#080C09]/90 border-white/[0.08]">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-[#7B8E84] font-medium">Masternodes</span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#FFB020]/10 text-[#FFB020] border border-[#FFB020]/30">
+              30% SHARE
+            </span>
+          </div>
+          <div className="font-heading font-black text-lg sm:text-xl text-white">
+            1,500 <span className="text-xs font-normal text-[#7B8E84]">KSH Collateral</span>
+          </div>
+          <p className="text-[10px] text-[#7B8E84] font-mono">0.60 KSH / block subsidy</p>
+        </div>
+      </div>
+
+      {/* ================= 5. LATEST MINED BLOCKS STREAM ================= */}
+      {recentBlocks.length > 0 && (
+        <div className="card space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Boxes className="w-4 h-4 text-[#00CC52]" />
+              <h3 className="font-heading font-bold text-sm sm:text-base text-white">
+                Live Block Stream
+              </h3>
+            </div>
+            <a
+              href="https://explorer.korsh.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-[#00CC52] hover:underline flex items-center gap-1 font-medium"
+            >
+              <span>View Full Chain</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+            {recentBlocks.slice(0, 3).map((b, idx) => {
+              const isCopied = copiedHash === b.blockhash;
+              return (
+                <div
+                  key={b.blockindex}
+                  className="p-3 rounded-xl bg-[#080C09] border border-white/[0.06] hover:border-[#00CC52]/30 transition-all space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-white text-xs">
+                      #{b.blockindex.toLocaleString()}
+                    </span>
+                    <span className={idx === 0 ? 'badge-neon text-[9px]' : 'badge-dim text-[9px]'}>
+                      {idx === 0 ? 'TIP BLOCK' : 'CONFIRMED'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-[#7B8E84] font-mono">
+                    <span>Reward: <strong className="text-white">2.0 KSH</strong></span>
+                    <span>{formatAgo(b.timestamp)}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] font-mono text-[#7B8E84] pt-1 border-t border-white/[0.04]">
+                    <span className="truncate max-w-[130px]">{b.blockhash}</span>
+                    <button
+                      onClick={() => handleCopyHash(b.blockhash)}
+                      className="hover:text-white transition-colors"
+                      title="Copy block hash"
+                    >
+                      {isCopied ? <Check className="w-3 h-3 text-[#00CC52]" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ================= 6. RECENT ACCOUNT TRANSACTIONS ================= */}
       <div className="card space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -247,7 +444,7 @@ export function Dashboard({
               Recent Transactions
             </h3>
             <p className="text-xs text-[#7B8E84]">
-              Latest confirmed transfers on this address
+              Latest confirmed transfers on your address
             </p>
           </div>
           {onViewHistory && (

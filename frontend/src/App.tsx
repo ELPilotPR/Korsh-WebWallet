@@ -174,6 +174,7 @@ function App() {
             address={wallet.walletData.address}
             onUnlock={wallet.handleUnlock}
             onLogout={wallet.handleLogout}
+            onRestore={() => wallet.setView('import')}
             loading={wallet.loading}
             error={wallet.error}
           />

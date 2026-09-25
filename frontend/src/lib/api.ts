@@ -93,3 +93,20 @@ export async function fetchNetworkStats(): Promise<NetworkStats> {
     };
   }
 }
+
+export interface RecentBlock {
+  blockindex: number;
+  blockhash: string;
+  txid: string;
+  recipients: number;
+  amount: string;
+  timestamp: number;
+}
+
+export async function fetchRecentBlocks(): Promise<RecentBlock[]> {
+  try {
+    return await apiFetch<RecentBlock[]>('/recent-blocks');
+  } catch {
+    return [];
+  }
+}
