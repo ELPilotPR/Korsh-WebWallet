@@ -6,8 +6,14 @@ const RPC_HOST = process.env.RPC_HOST || '127.0.0.1';
 const RPC_PORT = parseInt(process.env.RPC_PORT || '9776', 10);
 
 let requestId = 0;
+let lastRpcFailure = 0;
+const RPC_COOLDOWN_MS = 10000; // 10 seconds cooldown if RPC connection fails
 
 export async function rpcCall(method: string, params: unknown[] = []): Promise<unknown> {
+  if (Date.now() - lastRpcFailure < RPC_COOLDOWN_MS) {
+    throw new Error('RPC offline (in cooldown)');
+  }
+
   const id = ++requestId;
   const body = JSON.stringify({ jsonrpc: '1.0', id, method, params });
 
@@ -34,6 +40,7 @@ export async function rpcCall(method: string, params: unknown[] = []): Promise<u
             if (parsed.error) {
               reject(new Error(parsed.error.message || 'RPC error'));
             } else {
+              lastRpcFailure = 0; // Success, clear cooldown
               resolve(parsed.result);
             }
           } catch {
@@ -43,8 +50,12 @@ export async function rpcCall(method: string, params: unknown[] = []): Promise<u
       }
     );
 
-    req.on('error', (err) => reject(err));
-    req.setTimeout(30000, () => {
+    req.on('error', (err) => {
+      lastRpcFailure = Date.now();
+      reject(err);
+    });
+    req.setTimeout(3000, () => {
+      lastRpcFailure = Date.now();
       req.destroy();
       reject(new Error('RPC timeout'));
     });

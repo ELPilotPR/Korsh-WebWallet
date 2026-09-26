@@ -10,49 +10,78 @@ async function buildUtxos(address: string): Promise<Array<{
   scriptPubKey: string;
 }>> {
   // 1. Get address info from explorer to find all txids involving this address
-  const res = await fetch(`${process.env.EXPLORER_URL || 'http://127.0.0.1:8091'}/ext/getaddress/${address}`);
+  const explorerUrl = (process.env.EXPLORER_URL || 'https://explorer.korsh.org').replace(/\/+$/, '');
+  const res = await fetch(`${explorerUrl}/ext/getaddress/${address}`, {
+    headers: { 'User-Agent': 'KorshWebWallet/1.0', 'Accept': 'application/json' },
+  });
   if (!res.ok) return [];
   const addrInfo = await res.json() as ExplorerAddress | { error: string };
   if ('error' in addrInfo) return [];
 
-  // 2. Candidate txids: both received ('vout') and spent ('vin') txs.
-  //    Change outputs from our own spends live in 'vin' txs, so accept both types.
-  const voutTxids = [...new Set(addrInfo.last_txs.map((tx) => tx.addresses))];
-
-  // 3. For each tx, find outputs to our address and check if still unspent
-  const utxos: Array<{ txid: string; vout: number; amount: number; scriptPubKey: string }> = [];
-
-  for (const txid of voutTxids) {
-    try {
-      const rawTx = await rpcCall('getrawtransaction', [txid, true]) as {
-        vout: Array<{
-          value: number;
-          n: number;
-          scriptPubKey: { hex: string; address?: string; addresses?: string[] };
-        }>;
-      };
-
-      for (const vout of rawTx.vout) {
-        const addrs = vout.scriptPubKey.addresses || (vout.scriptPubKey.address ? [vout.scriptPubKey.address] : []);
-        if (!addrs.includes(address)) continue;
-
-        // Check if this output is still unspent
-        const txout = await rpcCall('gettxout', [txid, vout.n]);
-        if (txout) {
-          utxos.push({
-            txid,
-            vout: vout.n,
-            amount: vout.value,
-            scriptPubKey: vout.scriptPubKey.hex,
-          });
-        }
-      }
-    } catch {
-      // Skip failed txids
-    }
+  // If address has 0 balance, it cannot have unspent UTXOs
+  if (!addrInfo.balance || addrInfo.balance <= 0) {
+    return [];
   }
 
-  return utxos;
+  // 2. Candidate txids: both received ('vout') and spent ('vin') txs.
+  //    Change outputs from our own spends live in 'vin' txs, so accept both types.
+  const voutTxids = [...new Set(addrInfo.last_txs.map((tx) => tx.addresses))].slice(0, 25);
+
+  // 3. Resolve outputs in parallel with Explorer / RPC fallback
+  const results = await Promise.all(
+    voutTxids.map(async (txid) => {
+      try {
+        let rawTx: any = null;
+        try {
+          rawTx = (await rpcCall('getrawtransaction', [txid, true])) as {
+            vout: Array<{
+              value: number;
+              n: number;
+              scriptPubKey: { hex: string; address?: string; addresses?: string[] };
+            }>;
+          };
+        } catch {
+          const resp = await fetch(`${explorerUrl}/api/getrawtransaction?txid=${txid}&decrypt=1`, {
+            headers: { 'User-Agent': 'KorshWebWallet/1.0', 'Accept': 'application/json' },
+          });
+          if (resp.ok) {
+            rawTx = await resp.json();
+          }
+        }
+
+        if (!rawTx || !Array.isArray(rawTx.vout)) return [];
+
+        const matched: Array<{ txid: string; vout: number; amount: number; scriptPubKey: string }> = [];
+
+        for (const vout of rawTx.vout) {
+          const addrs = vout.scriptPubKey.addresses || (vout.scriptPubKey.address ? [vout.scriptPubKey.address] : []);
+          if (!addrs.includes(address)) continue;
+
+          let isUnspent = false;
+          try {
+            const txout = await rpcCall('gettxout', [txid, vout.n]);
+            if (txout) isUnspent = true;
+          } catch {
+            isUnspent = false;
+          }
+
+          if (isUnspent) {
+            matched.push({
+              txid,
+              vout: vout.n,
+              amount: vout.value,
+              scriptPubKey: vout.scriptPubKey.hex,
+            });
+          }
+        }
+        return matched;
+      } catch {
+        return [];
+      }
+    })
+  );
+
+  return results.flat();
 }
 
 const router = Router();
@@ -117,7 +146,7 @@ router.get('/history/:address', async (req: Request<{ address: string }>, res: R
   }
 });
 
-// GET /api/tx/:txid - uses RPC (verbose/decoded)
+// GET /api/tx/:txid - uses RPC (verbose/decoded) with Explorer API fallback
 router.get('/tx/:txid', async (req: Request<{ txid: string }>, res: Response) => {
   const txid = req.params.txid;
   if (!isValidTxid(txid)) {
@@ -128,12 +157,24 @@ router.get('/tx/:txid', async (req: Request<{ txid: string }>, res: Response) =>
     const result = await rpcCall('getrawtransaction', [txid, true]);
     res.json(result);
   } catch (err: unknown) {
+    // Graceful fallback to Explorer API
+    try {
+      const explorerUrl = (process.env.EXPLORER_URL || 'https://explorer.korsh.org').replace(/\/+$/, '');
+      const resp = await fetch(`${explorerUrl}/api/getrawtransaction?txid=${txid}&decrypt=1`, {
+        headers: { 'User-Agent': 'KorshWebWallet/1.0', 'Accept': 'application/json' },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        res.json(data);
+        return;
+      }
+    } catch {}
     const message = err instanceof Error ? err.message : 'Unknown error';
     res.status(500).json({ error: message });
   }
 });
 
-// GET /api/rawtx/:txid - raw hex for signing (nonWitnessUtxo)
+// GET /api/rawtx/:txid - raw hex for signing (nonWitnessUtxo) with Explorer API fallback
 router.get('/rawtx/:txid', async (req: Request<{ txid: string }>, res: Response) => {
   const txid = req.params.txid;
   if (!isValidTxid(txid)) {
@@ -144,6 +185,18 @@ router.get('/rawtx/:txid', async (req: Request<{ txid: string }>, res: Response)
     const hex = await rpcCall('getrawtransaction', [txid, false]);
     res.json({ hex });
   } catch (err: unknown) {
+    // Graceful fallback to Explorer API
+    try {
+      const explorerUrl = (process.env.EXPLORER_URL || 'https://explorer.korsh.org').replace(/\/+$/, '');
+      const resp = await fetch(`${explorerUrl}/api/getrawtransaction?txid=${txid}&decrypt=0`, {
+        headers: { 'User-Agent': 'KorshWebWallet/1.0' },
+      });
+      if (resp.ok) {
+        const hex = (await resp.text()).trim();
+        res.json({ hex });
+        return;
+      }
+    } catch {}
     const message = err instanceof Error ? err.message : 'Unknown error';
     res.status(500).json({ error: message });
   }
@@ -165,18 +218,7 @@ router.post('/broadcast', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/info - uses RPC
-router.get('/info', async (_req: Request, res: Response) => {
-  try {
-    const result = await rpcCall('getblockchaininfo');
-    res.json(result);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    res.status(500).json({ error: message });
-  }
-});
-
-// GET /api/network-stats - live network summary (explorer, RPC fallback)
+// GET /api/network-stats - live network summary from explorer / node
 router.get('/network-stats', async (_req: Request, res: Response) => {
   try {
     const summary = await getNetworkSummary();
@@ -190,14 +232,14 @@ router.get('/network-stats', async (_req: Request, res: Response) => {
       });
       return;
     }
-    // Fallback: node RPC when the explorer summary is unavailable
+    // Fallback to rpc info if summary is null
     const info = (await rpcCall('getblockchaininfo')) as Record<string, unknown>;
     res.json({
-      blockcount: Number(info.blocks) || 0,
-      difficulty: String(info.difficulty ?? '0'),
+      blockcount: info.blocks,
+      difficulty: String(info.difficulty),
       hashrate: 'N/A',
       supply: 0,
-      connections: Number(info.connections) || 0,
+      connections: 0,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -205,7 +247,7 @@ router.get('/network-stats', async (_req: Request, res: Response) => {
   }
 });
 
-// GET /api/recent-blocks - latest mined blocks / chain activity
+// GET /api/recent-blocks - latest mined blocks
 router.get('/recent-blocks', async (_req: Request, res: Response) => {
   try {
     const blocks = await getRecentBlocks(5);

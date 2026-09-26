@@ -140,8 +140,27 @@ The backend is a lightweight API proxy that connects to a Korsh full node. It on
 | `RPC_PORT` | `9776` | Korsh RPC port |
 | `RPC_USER` | `korsh_rpc` | RPC username |
 | `RPC_PASS` | — | RPC password (required) |
-| `CORS_ORIGIN` | `https://wallet.korsh.org` | Allowed CORS origin |
+| `CORS_ORIGIN` | `https://wallet.korsh.org` (+ dev origins) | Comma-separated CORS allow-list |
 | `EXPLORER_URL` | `http://127.0.0.1:8091` | eIquidus explorer URL |
+
+## Live UI (v3, Sep 2026)
+
+The production UI at wallet.korsh.org is the redesigned v3 build:
+
+- **Installable PWA** — service worker (network-first for the HTML shell, stale-while-revalidate for assets, `/api/*` never cached) + web manifest, so the wallet installs on desktop and mobile
+- **Network telemetry tab** — live hashrate, difficulty, peers, port, masternodes, supply and Recent Mined Blocks, served by `GET /api/network-stats` and `GET /api/recent-blocks`
+- **QR scanner** on Send (camera) and QR receive card
+- **Client-side signing** with per-tx detail (fee rate shown in duffs/B) and a broadcast-confirmation screen
+
+Backend hardening that ships with v3:
+
+- CORS is a strict allow-list (`CORS_ORIGIN`, comma-separated); unknown origins are rejected — never return `callback(null, true)` in the else path
+- `app.set('trust proxy', 'loopback')` so rate-limiting keys on the real client IP behind nginx
+- Amounts coming from the eIquidus explorer are normalized to numbers at the API boundary
+- `/api/utxos` resolves outputs in parallel (RPC first, explorer fallback) and accepts both receive (`vout`) and spend (`vin`) txs so change outputs are spendable
+- The nginx vhost allows the camera (`Permissions-Policy: camera=(self)`) and serves `/sw.js` with `Cache-Control: no-cache`
+
+Verification (Sep 25, 2026): create/backup/unlock E2E 31/31, WebKit smoke 7/7, import + history E2E 8/8 including a real 0.01 KSH send signed in the browser and confirmed on-chain.
 
 ## License
 

@@ -7,15 +7,26 @@ import routes from './routes';
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
-const ALLOWED_ORIGIN = process.env.CORS_ORIGIN || 'https://wallet.korsh.org';
+// Behind nginx on the same host: trust loopback so rate-limiting keys on the real client IP
+app.set('trust proxy', 'loopback');
+
+const allowedOrigins = (process.env.CORS_ORIGIN || 'https://wallet.korsh.org,http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000')
+  .split(',')
+  .map((s) => s.trim());
 
 // Security headers
 app.use(helmet());
 
-// CORS - only allow the wallet frontend
+// CORS - allow wallet frontend and development servers
 app.use(
   cors({
-    origin: ALLOWED_ORIGIN,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
     methods: ['GET', 'POST'],
   })
 );
