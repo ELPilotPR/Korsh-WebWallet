@@ -312,10 +312,6 @@ export function Layout({
               Live Explorer
             </a>
             <span>•</span>
-            <a href="https://github.com/ELPilotPR/Korsh-WebWallet" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
-              GitHub Repo
-            </a>
-            <span>•</span>
             <span>Port 9777 P2P</span>
           </div>
         </div>
